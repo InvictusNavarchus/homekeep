@@ -1,6 +1,13 @@
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { z } from "zod";
 
 const line = z
@@ -67,6 +74,26 @@ export function inside(root: string, path: string): boolean {
   return rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel);
 }
 
+// Resolve existing ancestors without creating state during `plan`.
+async function canonicalState(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    // An existing dangling symlink is not a missing directory we can append.
+    const entry = await lstat(path).catch(
+      (statError: NodeJS.ErrnoException) => {
+        if (statError.code !== "ENOENT") throw statError;
+        return undefined;
+      },
+    );
+    if (entry) throw error;
+    const parent = dirname(path);
+    if (parent === path) throw error;
+    return join(await canonicalState(parent), basename(path));
+  }
+}
+
 export async function loadPlan(
   configPath: string,
   home: string,
@@ -98,6 +125,7 @@ export async function loadPlan(
     );
   }
   home = await realpath(home);
+  state = await canonicalState(resolve(state));
   if (isAbsolute(config.destination)) {
     // Requiring an existing local destination also catches mistyped drive paths.
     const destination = await realpath(config.destination);

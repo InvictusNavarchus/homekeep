@@ -174,11 +174,36 @@ test("selecting home excludes Homekeep's own state", async () => {
   expect(await Bun.file(join(f.destination, "private.txt")).exists()).toBe(
     true,
   );
-  expect(
-    await Bun.file(
-      join(f.destination, ".local/state/homekeep/backup.lock"),
-    ).exists(),
-  ).toBe(false);
+  await expect(
+    stat(join(f.destination, ".local/state/homekeep")),
+  ).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+test("symlinked home and XDG state ancestors still exclude the entire state subtree", async () => {
+  const f = await fixture(["."]);
+  const alias = join(f.root, "home-alias");
+  await symlink(f.home, alias);
+  const env = {
+    ...f.env,
+    HOME: alias,
+    XDG_STATE_HOME: join(alias, ".local/state"),
+  };
+  const plan = await result(invoke(f, ["plan"], env));
+  expect(plan.code).toBe(0);
+  expect(plan.stdout).toContain("- /.local/state/homekeep/**");
+  await expect(stat(f.state)).rejects.toMatchObject({ code: "ENOENT" });
+  expect((await result(invoke(f, ["backup"], env))).code).toBe(0);
+  await expect(
+    stat(join(f.destination, ".local/state/homekeep")),
+  ).rejects.toMatchObject({ code: "ENOENT" });
+  const stateAlias = join(f.root, "state-alias");
+  await symlink(join(f.home, ".local/state"), stateAlias);
+  const xdgPlan = await loadPlan(
+    f.config,
+    f.home,
+    join(stateAlias, "homekeep"),
+  );
+  expect(xdgPlan.state).toBe(f.state);
 });
 
 test("missing, escaping, glob, and symlink selections fail before backup", async () => {
