@@ -1,0 +1,14 @@
+[Unit]
+Description=Back up selected home-directory files with Homekeep
+
+[Service]
+Type=oneshot
+# Edit the Bun and checkout paths to match your installation.
+ExecStart=%h/.bun/bin/bun /absolute/path/to/homekeep/src/cli.ts backup
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+UMask=0077
+TimeoutStartSec=infinity
+TimeoutStopSec=15s
+KillMode=control-group
+StandardOutput=journal
+StandardError=journal
