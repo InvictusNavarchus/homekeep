@@ -113,6 +113,39 @@ test("plan is local and displays mappings without creating state", async () => {
   expect(await Bun.file(join(f.state, "backup.lock")).exists()).toBe(false);
 });
 
+test("destination accepts rclone remote names while rejecting inline parameters", async () => {
+  const f = await fixture();
+  for (const destination of [
+    "My Drive:backup",
+    "drive+archive:backup",
+    "user@drive:backup",
+    "資料２:backup",
+    "gdrive-tgwndp:backup",
+  ]) {
+    await writeFile(
+      f.config,
+      Bun.TOML.stringify({ destination, paths: ["Documents"] }),
+    );
+    expect((await loadPlan(f.config, f.home, f.state)).config.destination).toBe(
+      destination,
+    );
+  }
+  for (const destination of [
+    " drive:backup",
+    "drive :backup",
+    "-drive:backup",
+    ":drive:backup",
+    "drive,token=secret:backup",
+    "drive/name:backup",
+  ]) {
+    await writeFile(
+      f.config,
+      Bun.TOML.stringify({ destination, paths: ["Documents"] }),
+    );
+    await expect(loadPlan(f.config, f.home, f.state)).rejects.toThrow();
+  }
+});
+
 test("real rclone preserves nested paths, literal names, exclusions, and remote-only files", async () => {
   const f = await fixture();
   await writeFile(join(f.destination, "retained.txt"), "old");

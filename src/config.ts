@@ -118,7 +118,11 @@ export async function loadPlan(
   // and inline backend credentials in diagnostic output.
   if (
     !isAbsolute(config.destination) &&
-    !/^[\w.-]+:[^\x00-\x1f]*$/.test(config.destination)
+    // rclone v1.75.2 fs/fspath configNameRe; commas remain disallowed so
+    // inline backend parameters cannot enter through a named destination.
+    !/^[\w\p{L}\p{N}.+@]+(?:[ -]+[\w\p{L}\p{N}.+@-]+)*:[^\x00-\x1f]*$/u.test(
+      config.destination,
+    )
   ) {
     throw new Error(
       "destination must be a named rclone remote:path or an absolute local path",

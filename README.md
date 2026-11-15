@@ -36,6 +36,8 @@ retention_days = 30
 
 Each selected path is literal and relative to your home directory. The destination represents that same root: `~/logseq/graphs/note.md` becomes `my-drive:rclone-backup/my-device/logseq/graphs/note.md`. Duplicate or overlapping selections do not transfer files twice. Select `.` to include the whole home directory, subject to exclusions.
 
+Named destinations accept rclone remote names including spaces, Unicode letters/numbers, `+`, and `@`, such as `My Drive:backup`. Inline backend parameters remain unsupported.
+
 Selections must exist before starting. Absolute paths, `..` components, glob metacharacters (`? * [ ] { }`), backslashes, surrounding whitespace, and control characters in selected paths are rejected. Symlinks and selected paths traversing symlinks are rejected; symlinks encountered inside selected directories are skipped by rclone. Empty directories are not copied. Live files are copied as rclone reads them; Homekeep does not take a filesystem or database snapshot.
 
 Exclusions use [rclone patterns](https://rclone.org/filtering/) relative to home, not shell expansion or Git ignore syntax. Exclusions win over selections. For example, `/Documents/private/**` excludes that subtree and `**/node_modules/**` excludes dependency trees at any depth. Homekeep's state directory is always excluded when it is beneath home. `plan` displays the generated rules; `--dry-run` previews rclone's actual work.
