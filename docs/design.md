@@ -1,6 +1,6 @@
 # Homekeep design
 
-Status: design only; no implementation or service installation yet.
+Status: initial CLI implemented. Service examples are provided separately; no service is installed or enabled by the project.
 
 ## Purpose and scope
 
@@ -26,7 +26,7 @@ The agreed direction is:
 - Dry-run support, runtime validation, overlap prevention, and persistent run logs.
 - A systemd user service and timer for future automation.
 
-The concrete CLI names, configuration field names, logging intervals and retention, and scheduling policies below are proposed defaults. They are not implemented behavior. Exact personal selections, exclusions, destination, and schedule remain user configuration decisions.
+The initial implementation adopts the CLI names, configuration field names, 30-second statistics interval, and 30-day log retention described below. The README is the operational reference. Exact personal selections, exclusions, destination, and schedule remain user configuration decisions. Scheduling policies remain proposals until the user installs and enables the units.
 
 ## Runtime choice
 
@@ -90,7 +90,7 @@ Use one rclone operation with the home directory as source. Generate a filter fi
 
 Selections are literal paths, while `exclude` entries use rclone syntax. Filter generation must account for traversal of parent directories, distinguish files from directories, and escape or reject literal path names that cannot safely be represented. Verify this against rclone rather than assuming shell glob rules apply. Overlapping selections should not cause duplicate work.
 
-Proposed initial symlink policy: do not follow symlinks; document that their targets are not backed up by default. Reject selected paths whose resolved location escapes the home directory. Always exclude Homekeep's own logs and runtime artifacts if a broader selection could include them.
+Initial symlink policy: do not follow symlinks. Reject explicit selections traversing symlinks, including those resolving outside home; rclone skips symlinks found within selected directories. Always exclude Homekeep's own logs and runtime artifacts if a broader selection could include them.
 
 Do not automatically rename the destination based on the hostname or hardware. Its configured value is the user's stable identifier.
 
@@ -133,7 +133,7 @@ Keep four responsibilities separate using ordinary modules/functions:
 
 Do not add a backend registry, plugin framework, or generic job engine. Keep rclone-specific construction isolated so a future rsync implementation can be added deliberately. Rclone exclusions must not be passed unchanged to rsync: their semantics are not interchangeable.
 
-Use a process-held lock shared by manual and scheduled invocations. Acquire it before transfer work and log retention cleanup. Prefer a lock that releases when the process exits; mere existence of a lock file must not leave a crashed run blocking all future work. A competing invocation should report that a run is already active without claiming to have backed up anything. The exact lock mechanism and exit-code mapping are implementation decisions.
+Use a process-held lock shared by manual and scheduled invocations. Acquire it before transfer work and log retention cleanup. Linux util-linux `flock` holds the kernel lock through a fixed Bun helper; closing its input releases the lock, including when the parent exits. The persistent lock file itself does not indicate ownership and must not be deleted to clear contention. A competing invocation reports that a run is already active and exits 75. Preserve rclone failure exit codes; use 1 for startup errors, 130 for SIGINT, and 143 for SIGTERM.
 
 Preserve failure semantics: rclone failure must produce a nonzero Homekeep exit status, including partial transfers. Report cancellation separately and terminate/reap the rclone child before normal cleanup. A hard crash may leave no final log summary; its absence is not success.
 

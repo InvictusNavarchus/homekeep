@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Homekeep backup
+
+[Timer]
+# Example schedule: daily at 18:00 in the system's local timezone.
+OnCalendar=*-*-* 18:00:00
+Persistent=true
+WakeSystem=false
+Unit=homekeep.service
+
+[Install]
+WantedBy=timers.target

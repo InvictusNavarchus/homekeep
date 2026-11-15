@@ -1,0 +1,14 @@
+# This destination represents your home directory. Configure the remote in rclone.
+destination = "my-drive:rclone-backup/my-device"
+paths = ["Documents", "logseq/graphs", "backup-phone"]
+
+# Native rclone patterns, relative to your home directory.
+exclude = ["**/node_modules/**", "**/__pycache__/**"]
+
+[rclone]
+transfers = 4
+stats_seconds = 30
+
+[logging]
+enabled = true
+retention_days = 30

@@ -1,0 +1,26 @@
+{
+  "name": "homekeep",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "homekeep": "src/cli.ts"
+  },
+  "engines": {
+    "bun": ">=1.4.4"
+  },
+  "scripts": {
+    "start": "bun src/cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "format": "bun fmt"
+  },
+  "dependencies": {
+    "cac": "7.1.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "typescript": "7.0.2"
+  }
+}
