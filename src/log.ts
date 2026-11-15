@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
 const logName =
-  /^homekeep-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)-[0-9a-f-]{36}\.log$/;
+  /^homekeep-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.log$/;
 
 export async function pruneLogs(
   directory: string,

@@ -294,13 +294,20 @@ test("retention only removes recognized old regular log files", async () => {
   const f = await fixture();
   await mkdir(f.state, { recursive: true });
   const old =
-    "homekeep-2000-01-01T00-00-00-000Z-00000000-0000-0000-0000-000000000000.log";
+    "homekeep-2000-01-01T00-00-00-000Z-00000000-0000-4000-8000-000000000000.log";
   await writeFile(join(f.state, old), "old");
   await writeFile(join(f.state, "notes.log"), "keep");
   const linked = old.replace("2000-", "2001-");
   await symlink(join(f.state, "notes.log"), join(f.state, linked));
+  const malformed = old.replace(
+    "00000000-0000-4000-8000-000000000000",
+    "a".repeat(36),
+  );
+  await writeFile(join(f.state, malformed), "not a Homekeep UUID");
   await pruneLogs(f.state, 30);
-  expect((await readdir(f.state)).sort()).toEqual([linked, "notes.log"].sort());
+  expect((await readdir(f.state)).sort()).toEqual(
+    [linked, malformed, "notes.log"].sort(),
+  );
 });
 
 test("logging failure warns and disabled logging creates no files", async () => {
