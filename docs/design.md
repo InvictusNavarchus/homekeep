@@ -18,6 +18,8 @@ The agreed direction is:
 
 - Bun and TypeScript, with strict static type checking.
 - cac for command parsing and help output.
+- Zod for configuration validation and inferred TypeScript types.
+- Bun's built-in `Bun.TOML.parse` for TOML parsing.
 - TOML configuration stored outside the project and managed separately with chezmoi.
 - One configured destination representing the home-directory root.
 - rclone-native filtering and transfer behavior.
@@ -33,6 +35,8 @@ Bun and TypeScript fit the user's existing CLI workflow. Rclone performs transfe
 Python would also be suitable and does not have a material disadvantage for systemd integration. Fish could wrap a few commands, but configuration validation, structured results, cancellation, and tests are easier to maintain in a general-purpose language as the tool grows.
 
 Executing TypeScript with Bun does not replace static type checking. Provide a separate typecheck script and run scripts through `bun run` (or `bunx` where appropriate). Choose current stable dependencies during implementation; this document does not pin versions.
+
+The initial application dependencies are cac and Zod. Use Bun's built-in TOML parser, subprocess APIs, and test tooling, along with standard filesystem/path APIs. TypeScript and Bun's type definitions are development dependencies. Verify the installed Bun version supports the required APIs and document the minimum supported version during implementation; no separate TOML parser is planned.
 
 ## Configuration and ownership
 
@@ -92,7 +96,7 @@ Do not automatically rename the destination based on the hostname or hardware. I
 
 ## Validation and command interface
 
-Parsed TOML is untrusted runtime data. Type assertions are not validation. Validate it once at the boundary and pass a typed configuration to the rest of the program.
+Parsed TOML is untrusted runtime data. Type assertions are not validation. Parse the file with `Bun.TOML.parse`, then validate its contents with Zod at the configuration boundary and pass the validated, typed configuration to the rest of the program. TOML parsing checks document syntax; Zod checks Homekeep's expected fields, values, and defaults.
 
 Proposed validation rules:
 
@@ -104,7 +108,7 @@ Proposed validation rules:
 - Reject invalid field types and report the field and reason clearly.
 - Confirm rclone is available and report remote/configuration failures without exposing credentials.
 
-The choice between handwritten validation and a small schema library remains open. Prefer the smallest approach that gives clear errors and avoids maintaining conflicting type and validation definitions.
+Define configuration types from the Zod schemas with `z.infer` instead of maintaining separate interfaces for the same shape. Use strict object schemas, including nested settings, to reject unknown keys, and format validation issues as clear field-specific errors. Keep filesystem checks, such as source existence and resolved-path containment, in ordinary functions after schema validation.
 
 Proposed commands:
 
@@ -185,6 +189,8 @@ Do not use personal Google Drive data as an automated test fixture. Document set
 
 ## References
 
+- [Zod validation and inferred types](https://zod.dev/basics)
+- [Bun TOML parsing](https://bun.com/docs/runtime/toml)
 - [rclone copy semantics](https://rclone.org/commands/rclone_copy/)
 - [rclone filtering](https://rclone.org/filtering/)
 - [rclone logging and command options](https://rclone.org/docs/)
