@@ -4,6 +4,7 @@ import { backup } from "./backup.ts";
 import { configSchema, loadPlan, locations } from "./config.ts";
 import { AlreadyRunning } from "./lock.ts";
 import { filters } from "./rclone.ts";
+import { installService } from "./service.ts";
 import { version } from "../package.json";
 
 type CommandOptions = {
@@ -50,14 +51,11 @@ cli.option(
   "--config <path>",
   "Configuration file (default: XDG config directory)",
 );
-cli.option("--transfers <number>", "Override simultaneous file transfers");
-cli.option("--checkers <number>", "Override parallel file checks");
-cli.option(
-  "--stats-seconds <number>",
-  "Override statistics interval in seconds",
-);
 cli
   .command("plan", "Show configuration, mappings, and rclone filters")
+  .option("--transfers <number>", "Override simultaneous file transfers")
+  .option("--checkers <number>", "Override parallel file checks")
+  .option("--stats-seconds <number>", "Override statistics interval in seconds")
   .action(async (options: CommandOptions) => {
     const plan = await commandPlan(options);
     console.log(
@@ -74,11 +72,34 @@ cli
   });
 cli
   .command("backup", "Copy selected files and record the outcome")
+  .option("--transfers <number>", "Override simultaneous file transfers")
+  .option("--checkers <number>", "Override parallel file checks")
+  .option("--stats-seconds <number>", "Override statistics interval in seconds")
   .option("--dry-run", "Preview changes without copying")
   .action(async (options: CommandOptions) => {
     const plan = await commandPlan(options);
     process.exitCode = await backup(plan, options.dryRun ?? false);
   });
+cli
+  .command(
+    "service <action>",
+    "Install or update the systemd user service and timer",
+  )
+  .option(
+    "--time <HH:MM>",
+    "Daily local time (new install: 06:00; update: preserve)",
+  )
+  .option("--enable", "Enable and start the timer after installation")
+  .action(
+    async (
+      action: string,
+      options: CommandOptions & { time?: unknown; enable?: boolean },
+    ) => {
+      if (action !== "install")
+        throw new Error("Supported service action: install");
+      await installService(options);
+    },
+  );
 cli.help();
 cli.version(version);
 try {

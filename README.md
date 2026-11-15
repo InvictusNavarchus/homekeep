@@ -100,21 +100,33 @@ The initial implementation follows [the design](docs/design.md).
 
 ## Optional scheduling
 
-Example [user service](systemd/homekeep.service) and [timer](systemd/homekeep.timer) files are provided. Homekeep does not install or enable them. First configure your personal paths and verify a manual dry run and backup.
-
-To set up scheduling yourself:
-
-1. Copy the two unit files into `~/.config/systemd/user/`.
-2. Edit the service's `ExecStart` to use your absolute Bun executable and checkout paths. The template assumes Bun lives at `%h/.bun/bin/bun`; replace `/absolute/path/to/homekeep/src/cli.ts`. Quote paths containing spaces. `%h` expands to your home directory; literal percent signs must be escaped as `%%` in unit files.
-3. Confirm rclone and flock are in the explicit service PATH. The service uses Homekeep's default configuration location. Add `--config /absolute/path/to/config.toml` to `ExecStart` if needed. If you use custom XDG paths or `RCLONE_CONFIG`, set those explicitly with `Environment=`; fish startup configuration is not loaded.
-4. Edit `OnCalendar` to your preferred schedule. The example uses 18:00 daily in local time.
-5. Verify the units, reload the user manager, and enable the timer:
+First configure your personal paths and verify a manual dry run and backup. Then install the systemd user units:
 
 ```sh
-systemd-analyze --user verify ~/.config/systemd/user/homekeep.service ~/.config/systemd/user/homekeep.timer
-systemctl --user daemon-reload
-systemctl --user enable --now homekeep.timer
+homekeep service install --time 06:00 --enable
 ```
+
+The installer locates the current Bun executable and Homekeep checkout, discovers rclone/flock on PATH, validates the generated units with `systemd-analyze --user verify`, installs them under `$XDG_CONFIG_HOME/systemd/user` (normally `~/.config/systemd/user`), and reloads the user manager. Keep the checkout and dependencies available. No root privileges are needed. `--enable` enables and starts the timer; a missed schedule can cause an immediate backup. Without it, existing timer activation is unchanged.
+
+To update the service after moving the checkout or changing Bun installations:
+
+```sh
+homekeep service install
+```
+
+New installs default to 06:00 local time. Updates without `--time` preserve the existing timer file verbatim. Supplying `--time HH:MM` replaces the timer with the standard daily template at that time. The service file is regenerated on every install; use systemd drop-ins for persistent customizations. Drop-ins remain in force and can override generated settings. Non-regular unit files, including symlinks, are rejected rather than overwritten.
+
+The installer captures the current XDG config/state locations and `RCLONE_CONFIG` path when set. Use `--config /absolute/path/config.toml` to select a custom Homekeep config; repeat this option on updates. Scheduled tuning belongs in TOML; `--transfers`, `--checkers`, and `--stats-seconds` are rejected for installation. Fish startup configuration is not loaded by the service. The command does not create your backup config or manage rclone credentials.
+
+Units are validated before replacement. If reloading or enabling fails, the command exits unsuccessfully and reports the failure; installed files remain available for inspection and retry. It does not restart an in-progress backup.
+
+If you track these files with chezmoi, capture them after installing or updating (adjust paths for custom XDG locations):
+
+```sh
+chezmoi add ~/.config/systemd/user/homekeep.service ~/.config/systemd/user/homekeep.timer
+```
+
+The [example service](systemd/homekeep.service) and [timer](systemd/homekeep.timer) remain available for manual installation. Their executable path and schedule must be edited for your machine.
 
 `Persistent=true` catches up missed calendar activations when the user timer becomes active. It does not track backup success or retry a failed run immediately. The timer does not deliberately wake a suspended laptop, no lingering is configured, and logged-out execution is not guaranteed. There is no battery-power restriction in the examples; they can run on battery. Rclone retries network failures within a run; afterward, failures wait for the next scheduled activation or manual retry.
 

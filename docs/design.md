@@ -159,6 +159,8 @@ A small shared logger is sufficient initially. Logs are diagnostic evidence, not
 
 ## Systemd integration
 
+`homekeep service install [--time HH:MM] [--enable]` generates and validates user units using the current runtime and checkout. New installs default to 06:00 local time; updates preserve the timer unless a time is supplied. Enabling is explicit. The service is regenerated, with persistent customizations kept in systemd drop-ins. Personal unit files can be captured separately with chezmoi.
+
 Provide example user units for installation under `~/.config/systemd/user/`. The project does not automatically install or enable them. The service runs as the user and invokes the same backup command used interactively.
 
 - Use `Type=oneshot`; perform one backup and exit, without `RemainAfterExit=yes`.
