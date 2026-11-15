@@ -65,6 +65,7 @@ exclude = [
 
 [rclone]
 transfers = 4
+checkers = 8
 ```
 
 Keep remote authentication in rclone's own configuration. Homekeep only stores the destination remote/path, not credentials. Do not commit personal paths or credentials in the project's example.

@@ -1,30 +1,70 @@
 #!/usr/bin/env bun
 import { cac } from "cac";
 import { backup } from "./backup.ts";
-import { loadPlan, locations } from "./config.ts";
+import { configSchema, loadPlan, locations } from "./config.ts";
 import { AlreadyRunning } from "./lock.ts";
 import { filters } from "./rclone.ts";
 import { version } from "../package.json";
+
+type CommandOptions = {
+  config?: string;
+  dryRun?: boolean;
+  transfers?: unknown;
+  checkers?: unknown;
+  statsSeconds?: unknown;
+};
+
+async function commandPlan(options: CommandOptions) {
+  const paths = locations();
+  const plan = await loadPlan(
+    options.config ?? paths.config,
+    paths.home,
+    paths.state,
+  );
+  const overrides: Partial<typeof plan.config.rclone> = {};
+  for (const [flag, key, value] of [
+    ["transfers", "transfers", options.transfers],
+    ["checkers", "checkers", options.checkers],
+    ["stats-seconds", "stats_seconds", options.statsSeconds],
+  ] as const) {
+    if (value === undefined) continue;
+    const number =
+      typeof value === "string" && /^\d+$/.test(value)
+        ? Number(value)
+        : typeof value === "number"
+          ? value
+          : NaN;
+    if (!Number.isSafeInteger(number) || number <= 0)
+      throw new Error(`--${flag} must be a positive integer`);
+    overrides[key] = number;
+  }
+  plan.config.rclone = configSchema.shape.rclone.parse({
+    ...plan.config.rclone,
+    ...overrides,
+  });
+  return plan;
+}
 
 const cli = cac("homekeep");
 cli.option(
   "--config <path>",
   "Configuration file (default: XDG config directory)",
 );
+cli.option("--transfers <number>", "Override simultaneous file transfers");
+cli.option("--checkers <number>", "Override parallel file checks");
+cli.option(
+  "--stats-seconds <number>",
+  "Override statistics interval in seconds",
+);
 cli
   .command("plan", "Show configuration, mappings, and rclone filters")
-  .action(async (options: { config?: string }) => {
-    const paths = locations();
-    const plan = await loadPlan(
-      options.config ?? paths.config,
-      paths.home,
-      paths.state,
-    );
+  .action(async (options: CommandOptions) => {
+    const plan = await commandPlan(options);
     console.log(
       `Source: ${plan.home}\nDestination: ${plan.config.destination}\nState: ${plan.state}`,
     );
     console.log(
-      `Transfers: ${plan.config.rclone.transfers}\nStatistics interval: ${plan.config.rclone.stats_seconds}s\nFile logging: ${plan.config.logging.enabled}; retention: ${plan.config.logging.retention_days} days`,
+      `Transfers: ${plan.config.rclone.transfers}\nCheckers: ${plan.config.rclone.checkers}\nStatistics interval: ${plan.config.rclone.stats_seconds}s\nFile logging: ${plan.config.logging.enabled}; retention: ${plan.config.logging.retention_days} days`,
     );
     for (const selection of plan.selections)
       console.log(
@@ -35,13 +75,8 @@ cli
 cli
   .command("backup", "Copy selected files and record the outcome")
   .option("--dry-run", "Preview changes without copying")
-  .action(async (options: { config?: string; dryRun?: boolean }) => {
-    const paths = locations();
-    const plan = await loadPlan(
-      options.config ?? paths.config,
-      paths.home,
-      paths.state,
-    );
+  .action(async (options: CommandOptions) => {
+    const plan = await commandPlan(options);
     process.exitCode = await backup(plan, options.dryRun ?? false);
   });
 cli.help();

@@ -89,6 +89,9 @@ test("Zod rejects unknown fields, wrong types, and invalid concurrency", () => {
     { typo: true },
     { rclone: { transfers: "many" } },
     { rclone: { transfers: 0 } },
+    { rclone: { checkers: 0 } },
+    { rclone: { checkers: 1.5 } },
+    { rclone: { checkers: "8" } },
     { logging: { typo: true } },
   ]) {
     expect(
@@ -110,6 +113,80 @@ test("plan is local and displays mappings without creating state", async () => {
   const run = await result(invoke(f, ["plan"]));
   expect(run.code).toBe(0);
   expect(run.stdout).toContain("logseq/graphs ->");
+  expect(run.stdout).toContain(
+    "Transfers: 4\nCheckers: 8\nStatistics interval: 30s",
+  );
+  expect(await Bun.file(join(f.state, "backup.lock")).exists()).toBe(false);
+});
+
+test("CLI tuning overrides config per invocation and reaches rclone", async () => {
+  const f = await fixture();
+  const config = Bun.TOML.stringify({
+    destination: f.destination,
+    paths: ["Documents"],
+    rclone: { transfers: 3, checkers: 6, stats_seconds: 12 },
+  });
+  await writeFile(f.config, config);
+  const saved = await result(invoke(f, ["plan"]));
+  expect(saved.stdout).toContain(
+    "Transfers: 3\nCheckers: 6\nStatistics interval: 12s",
+  );
+  const partial = await result(invoke(f, ["plan", "--transfers", "10"]));
+  expect(partial.stdout).toContain(
+    "Transfers: 10\nCheckers: 6\nStatistics interval: 12s",
+  );
+  const flags = ["--transfers", "10", "--checkers=16", "--stats-seconds", "1"];
+  const plan = await result(invoke(f, ["plan", ...flags]));
+  expect(plan.code).toBe(0);
+  expect(plan.stdout).toContain(
+    "Transfers: 10\nCheckers: 16\nStatistics interval: 1s",
+  );
+  const captured = join(f.root, "args.json");
+  const env = await fakeRclone(
+    f,
+    `await Bun.write(${JSON.stringify(captured)}, JSON.stringify(process.argv.slice(2)));`,
+  );
+  const run = await result(invoke(f, ["backup", "--dry-run", ...flags], env));
+  expect(run.code).toBe(0);
+  const args: string[] = JSON.parse(await readFile(captured, "utf8"));
+  for (const [flag, value] of [
+    ["--transfers", "10"],
+    ["--checkers", "16"],
+    ["--stats", "1s"],
+  ]) {
+    expect(args[args.indexOf(flag!) + 1]).toBe(value);
+  }
+  expect(args).toContain("--dry-run");
+  expect((await logs(f))[0]).toContain(
+    "transfers=10; checkers=16; stats_seconds=1",
+  );
+  expect(await readFile(f.config, "utf8")).toBe(config);
+  const after = await result(invoke(f, ["plan"]));
+  expect(after.stdout).toContain(
+    "Transfers: 3\nCheckers: 6\nStatistics interval: 12s",
+  );
+});
+
+test("invalid CLI tuning fails before creating backup state", async () => {
+  const f = await fixture();
+  for (const flag of ["--transfers", "--checkers", "--stats-seconds"]) {
+    for (const value of [
+      "0",
+      "-1",
+      "1.5",
+      "many",
+      "true",
+      "9007199254740992",
+    ]) {
+      const run = await result(invoke(f, ["backup", `${flag}=${value}`]));
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain(`${flag} must be a positive integer`);
+    }
+    expect((await result(invoke(f, ["backup", flag]))).code).toBe(1);
+    expect(
+      (await result(invoke(f, ["backup", flag, "2", flag, "3"]))).code,
+    ).toBe(1);
+  }
   expect(await Bun.file(join(f.state, "backup.lock")).exists()).toBe(false);
 });
 

@@ -30,6 +30,7 @@ export const configSchema = z.strictObject({
   rclone: z
     .strictObject({
       transfers: z.number().int().positive().default(4),
+      checkers: z.number().int().positive().default(8),
       stats_seconds: z.number().int().positive().default(30),
     })
     .prefault({}),

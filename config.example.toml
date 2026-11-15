@@ -7,6 +7,7 @@ exclude = ["**/node_modules/**", "**/__pycache__/**"]
 
 [rclone]
 transfers = 4
+checkers = 8
 stats_seconds = 30
 
 [logging]

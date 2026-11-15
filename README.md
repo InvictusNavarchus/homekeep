@@ -25,6 +25,7 @@ exclude = ["**/node_modules/**", "**/__pycache__/**"]
 
 [rclone]
 transfers = 4
+checkers = 8
 stats_seconds = 30
 
 [logging]
@@ -55,6 +56,13 @@ bun run start plan
 bun run start backup --dry-run
 bun run start backup
 bun run start backup --config /absolute/path/to/config.toml
+```
+
+Both commands accept `--transfers <number>`, `--checkers <number>`, and `--stats-seconds <number>`. Values must be positive integers. Precedence is **CLI override → TOML config → default** (4 transfers, 8 checkers, 30 seconds). Overrides affect only that invocation; they do not edit your config or change scheduled runs. The config itself must still be valid. `plan` shows the effective settings, and backup logs record them.
+
+```sh
+homekeep plan --transfers 10 --checkers 8
+homekeep backup --transfers 10 --checkers 8 --stats-seconds 1
 ```
 
 `plan` validates configuration and source paths locally, without contacting the remote or creating state. Backup and dry-run commands contact rclone and create state. Dry runs leave destination files unchanged. Use `--help` on either command for options.

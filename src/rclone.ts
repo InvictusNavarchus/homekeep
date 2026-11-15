@@ -31,6 +31,8 @@ export function copyArgs(
     filterPath,
     "--transfers",
     String(plan.config.rclone.transfers),
+    "--checkers",
+    String(plan.config.rclone.checkers),
     "--stats",
     `${plan.config.rclone.stats_seconds}s`,
     "--log-level",

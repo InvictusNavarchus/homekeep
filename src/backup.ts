@@ -61,7 +61,7 @@ export async function backup(plan: Plan, dryRun: boolean): Promise<number> {
       `Starting ${dryRun ? "dry run" : "backup"}; source=${plan.home}; destination=${plan.config.destination}`,
     );
     log.write(
-      `Selections: ${plan.selections.map((item) => item.path || ".").join(", ")}; transfers=${plan.config.rclone.transfers}`,
+      `Selections: ${plan.selections.map((item) => item.path || ".").join(", ")}; transfers=${plan.config.rclone.transfers}; checkers=${plan.config.rclone.checkers}; stats_seconds=${plan.config.rclone.stats_seconds}`,
     );
     if (plan.config.logging.enabled) {
       try {
