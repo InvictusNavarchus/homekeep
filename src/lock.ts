@@ -21,7 +21,8 @@ export async function acquireLock(state: string): Promise<() => Promise<void>> {
       "-e",
       'console.log("locked"); await Bun.stdin.text();',
     ],
-    { stdin: "pipe", stdout: "pipe", stderr: "inherit" },
+    // Keep terminal SIGINT away from the holder until the parent finishes cleanup.
+    { stdin: "pipe", stdout: "pipe", stderr: "inherit", detached: true },
   );
   const reader = child.stdout.getReader();
   const ready = await reader.read();
