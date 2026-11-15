@@ -49,7 +49,7 @@ export class RunLog {
     }
   }
 
-  write(message: string) {
+  write(message: string, stream: "stdout" | "stderr" = "stdout") {
     const clean = stripVTControlCharacters(message).replace(
       /[\x00-\x08\x0b-\x1f\x7f]/g,
       "",
@@ -59,7 +59,10 @@ export class RunLog {
       .filter(Boolean)
       .map((line) => `${new Date().toISOString()} ${line}\n`)
       .join("");
-    if (text) console.error(text.trimEnd());
+    if (text) {
+      if (stream === "stderr") console.error(text.trimEnd());
+      else console.log(text.trimEnd());
+    }
     if (this.fd === undefined) return;
     try {
       writeSync(this.fd, text);

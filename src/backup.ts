@@ -8,6 +8,7 @@ import { copyArgs, filters } from "./rclone.ts";
 
 const eventSchema = z.object({
   msg: z.string(),
+  level: z.string().optional(),
   object: z.string().optional(),
   stats: z
     .object({ transfers: z.number(), checks: z.number(), bytes: z.number() })
@@ -69,14 +70,14 @@ export async function backup(plan: Plan, dryRun: boolean): Promise<number> {
           plan.config.logging.retention_days,
         );
       } catch {
-        log.write("Warning: log retention cleanup unavailable.");
+        log.write("Warning: log retention cleanup unavailable.", "stderr");
       }
     }
     temporary = await mkdtemp(join(plan.state, "run-"));
     const filterPath = join(temporary, "filters");
     await writeFile(filterPath, filters(plan), { mode: 0o600 });
     if (signal) {
-      log.write(`Cancelled (${signal}) before rclone started.`);
+      log.write(`Cancelled (${signal}) before rclone started.`, "stderr");
       return signal === "SIGINT" ? 130 : 143;
     }
     const proc = Bun.spawn(["rclone", ...copyArgs(plan, filterPath, dryRun)], {
@@ -86,25 +87,40 @@ export async function backup(plan: Plan, dryRun: boolean): Promise<number> {
     });
     child = proc;
     let stats: z.infer<typeof eventSchema>["stats"];
-    const output = (line: string) => {
+    const output = (line: string, source: "stdout" | "stderr") => {
       if (!line) return;
       try {
         const event = eventSchema.safeParse(JSON.parse(line));
         if (event.success) {
           if (event.data.stats) stats = event.data.stats;
+          const level = event.data.level?.toLowerCase();
+          // NOTICE includes dry-run previews; it is not an error severity.
+          const stream = ["debug", "info", "notice"].includes(level ?? "")
+            ? "stdout"
+            : [
+                  "warning",
+                  "warn",
+                  "error",
+                  "critical",
+                  "alert",
+                  "emergency",
+                ].includes(level ?? "")
+              ? "stderr"
+              : source;
           log.write(
             `rclone: ${event.data.object ? `${event.data.object}: ` : ""}${event.data.msg}`,
+            stream,
           );
           return;
         }
       } catch {
         /* Non-JSON startup errors are still useful diagnostics. */
       }
-      log.write(`rclone: ${line}`);
+      log.write(`rclone: ${line}`, source);
     };
     await Promise.all([
-      consume(proc.stdout, output),
-      consume(proc.stderr, output),
+      consume(proc.stdout, (line) => output(line, "stdout")),
+      consume(proc.stderr, (line) => output(line, "stderr")),
       proc.exited,
     ]);
     const code = await proc.exited;
@@ -112,6 +128,7 @@ export async function backup(plan: Plan, dryRun: boolean): Promise<number> {
     if (signal) {
       log.write(
         `Cancelled (${signal}); rclone exit=${code}; elapsed=${elapsed}s`,
+        "stderr",
       );
       return signal === "SIGINT" ? 130 : 143;
     }
@@ -120,6 +137,7 @@ export async function backup(plan: Plan, dryRun: boolean): Promise<number> {
       : "; statistics unavailable";
     log.write(
       `${code === 0 ? (dryRun ? "Dry run completed" : "Backup succeeded") : "Backup failed"}; rclone exit=${code}; elapsed=${elapsed}s${summary}`,
+      code === 0 ? "stdout" : "stderr",
     );
     if (code === 0 && !dryRun && stats?.transfers === 0)
       log.write(
@@ -129,6 +147,7 @@ export async function backup(plan: Plan, dryRun: boolean): Promise<number> {
   } catch (error) {
     log.write(
       `Backup failed: ${error instanceof Error ? error.message : "unexpected error"}`,
+      "stderr",
     );
     return 1;
   } finally {
@@ -142,7 +161,7 @@ export async function backup(plan: Plan, dryRun: boolean): Promise<number> {
     process.off("SIGTERM", terminate);
     if (temporary)
       await rm(temporary, { recursive: true, force: true }).catch(() =>
-        log.write("Warning: temporary filter cleanup failed."),
+        log.write("Warning: temporary filter cleanup failed.", "stderr"),
       );
     log.close();
     await release();

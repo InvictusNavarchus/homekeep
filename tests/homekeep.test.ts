@@ -179,9 +179,9 @@ test("real rclone preserves nested paths, literal names, exclusions, and remote-
   );
   const second = await result(invoke(f, ["backup"]));
   expect(second.code).toBe(0);
-  expect(second.stderr).toContain("No files transferred");
+  expect(second.stdout).toContain("No files transferred");
   expect((await logs(f)).length).toBe(2);
-  expect(first.stderr).toContain("Backup succeeded");
+  expect(first.stdout).toContain("Backup succeeded");
   const logFile = (await readdir(join(f.state, "logs")))[0]!;
   expect((await stat(join(f.state, "logs", logFile))).mode & 0o777).toBe(0o600);
   await writeFile(join(f.home, "Documents/keep.txt"), "updated content");
@@ -212,7 +212,7 @@ test("dry run leaves the destination unchanged and is logged as a preview", asyn
     await readFile(join(f.destination, "destination-only.txt"), "utf8"),
   ).toBe("retain me");
   expect(await readdir(join(f.destination, "Documents"))).toEqual(["keep.txt"]);
-  expect(run.stderr).toContain("Dry run completed");
+  expect(run.stdout).toContain("Dry run completed");
   expect((await logs(f))[0]).toContain("dry run");
 });
 
@@ -356,6 +356,67 @@ async function fakeRclone(
   await writeFile(file, `#!${process.execPath}\n${body}\n`);
   await chmod(file, 0o755);
   return { ...f.env, PATH: `${bin}:${process.env.PATH}` };
+}
+
+for (const enabled of [true, false]) {
+  test(`routes child severity and preserves file output (logging=${enabled})`, async () => {
+    const f = await fixture();
+    await writeFile(
+      f.config,
+      Bun.TOML.stringify({
+        destination: f.destination,
+        paths: ["Documents"],
+        logging: { enabled },
+      }),
+    );
+    const env = await fakeRclone(
+      f,
+      `
+      for (const level of ["debug", "info", "notice"])
+        console.error(JSON.stringify({level, msg: "routine-" + level}));
+      for (const level of ["warning", "error", "critical", "alert", "emergency"])
+        console.log(JSON.stringify({level, msg: "diagnostic-" + level}));
+      console.error(JSON.stringify({level: "future-level", msg: "unknown-stderr"}));
+      console.error(JSON.stringify({msg: "missing-level-stderr"}));
+      console.error("raw-stderr");
+      console.log("raw-stdout");
+    `,
+    );
+    const run = await result(invoke(f, ["backup"], env));
+    expect(run.code).toBe(0);
+    const normal = [
+      "routine-debug",
+      "routine-info",
+      "routine-notice",
+      "raw-stdout",
+      "Backup succeeded",
+    ];
+    const diagnostic = [
+      "diagnostic-warning",
+      "diagnostic-error",
+      "diagnostic-critical",
+      "diagnostic-alert",
+      "diagnostic-emergency",
+      "unknown-stderr",
+      "missing-level-stderr",
+      "raw-stderr",
+    ];
+    for (const message of normal) {
+      expect(run.stdout).toContain(message);
+      expect(run.stderr).not.toContain(message);
+    }
+    for (const message of diagnostic) {
+      expect(run.stderr).toContain(message);
+      expect(run.stdout).not.toContain(message);
+    }
+    if (enabled) {
+      const log = (await logs(f))[0]!;
+      for (const message of [...normal, ...diagnostic])
+        expect(log).toContain(message);
+    } else {
+      expect((await readdir(f.state)).includes("logs")).toBe(false);
+    }
+  });
 }
 
 test("partial failure preserves exit status and records child diagnostics", async () => {

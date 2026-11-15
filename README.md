@@ -69,7 +69,7 @@ Successful runs exit 0. Rclone failures retain its exit code; startup/configurat
 
 ## Logs and state
 
-Backup and dry-run output goes to stderr and, by default, a uniquely named `homekeep-<UTC timestamp>-<UUID>.log` file in the state directory's `logs/` subdirectory. Startup prints the log path. `plan` uses stdout and has no run log. Errors before logging starts appear on stderr.
+Backup and dry-run progress and successful completion go to stdout; warnings, errors, and cancellation go to stderr. Rclone JSON events are routed by severity: debug/info/notice go to stdout, warning and higher severities go to stderr. Unrecognized or unstructured child output keeps its original stream. Both streams are captured in a uniquely named `homekeep-<UTC timestamp>-<UUID>.log` file in the state directory's `logs/` subdirectory by default. Startup prints the log path. `plan` uses stdout and has no run log. Errors before logging starts appear on stderr.
 
 Logs contain timestamped lifecycle messages, selected scope, rclone diagnostics, periodic transfer statistics, and final status. Rclone's JSON events are rendered as plain text without animated progress or terminal colors. Final summaries use rclone's structured counters when available; dry-run counters are not claims of uploaded data.
 
