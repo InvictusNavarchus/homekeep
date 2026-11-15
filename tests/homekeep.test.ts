@@ -193,9 +193,25 @@ test("real rclone preserves nested paths, literal names, exclusions, and remote-
 
 test("dry run leaves the destination unchanged and is logged as a preview", async () => {
   const f = await fixture();
+  await mkdir(join(f.destination, "Documents"));
+  await writeFile(
+    join(f.destination, "Documents/keep.txt"),
+    "original destination content",
+  );
+  await writeFile(join(f.destination, "destination-only.txt"), "retain me");
   const run = await result(invoke(f, ["backup", "--dry-run"]));
   expect(run.code).toBe(0);
-  expect(await readdir(f.destination)).toEqual([]);
+  expect((await readdir(f.destination)).sort()).toEqual([
+    "Documents",
+    "destination-only.txt",
+  ]);
+  expect(
+    await readFile(join(f.destination, "Documents/keep.txt"), "utf8"),
+  ).toBe("original destination content");
+  expect(
+    await readFile(join(f.destination, "destination-only.txt"), "utf8"),
+  ).toBe("retain me");
+  expect(await readdir(join(f.destination, "Documents"))).toEqual(["keep.txt"]);
   expect(run.stderr).toContain("Dry run completed");
   expect((await logs(f))[0]).toContain("dry run");
 });
