@@ -125,9 +125,14 @@ homekeep service install --time 06:00 --enable
 
 The installer locates the current Bun executable and Homekeep checkout, discovers rclone/flock on PATH, validates the generated units with `systemd-analyze --user verify`, installs them under `$XDG_CONFIG_HOME/systemd/user` (normally `~/.config/systemd/user`), and reloads the user manager. Keep the checkout and dependencies available. No root privileges are needed. `--enable` enables and starts the timer; a missed schedule can cause an immediate backup. Without it, existing timer activation is unchanged.
 
-To update the service after moving the checkout or changing Bun installations:
+After moving the checkout or changing Bun installations, register the command
+again from the new/current checkout before regenerating the units. Use the Bun
+installation intended for scheduled backups, and repeat any previous `--config`
+options on `service install`:
 
 ```sh
+cd /absolute/path/to/homekeep
+bun link
 homekeep service install
 ```
 
@@ -165,7 +170,11 @@ A completed oneshot service normally becomes inactive; inspect its result and lo
 invocations without a rebuild; dependency changes need `bun install --frozen-lockfile`.
 Use a separate checkout for development if this one is scheduled. A running Bun
 process is not restarted by `homekeep service install`. After moving the checkout
-or Bun executable, regenerate the units with the same config options used before.
+or Bun executable, run `bun link` from the new/current checkout, then regenerate
+the units with the same config options used before. Alternatively, invoke the
+checkout directly with `bun /absolute/path/to/homekeep/src/cli.ts service install`
+and the previous config options; this regenerates units without repairing the
+globally linked command.
 
 To remove scheduling, first disable the timer:
 
