@@ -100,7 +100,24 @@ The initial implementation follows [the design](docs/design.md).
 
 ## Optional scheduling
 
-First configure your personal paths and verify a manual dry run and backup. Then install the systemd user units:
+Homekeep uses your user manager because its daily personal backup does not
+require execution while logged out. It runs as your account and uses your backup
+configuration and credentials. Installation needs no root privileges and does not
+change account-wide lingering. If another tool has enabled lingering, this timer
+can also run while you are logged out; that is supported, but not required.
+
+First configure your personal paths and verify a manual dry run and backup. Unit
+installation and activation are separate choices:
+
+```sh
+# Install/update units without enabling or starting a timer.
+homekeep service install
+
+# Explicitly enable and start the timer when ready.
+systemctl --user enable --now homekeep.timer
+```
+
+The combined explicit opt-in remains available:
 
 ```sh
 homekeep service install --time 06:00 --enable
@@ -108,9 +125,14 @@ homekeep service install --time 06:00 --enable
 
 The installer locates the current Bun executable and Homekeep checkout, discovers rclone/flock on PATH, validates the generated units with `systemd-analyze --user verify`, installs them under `$XDG_CONFIG_HOME/systemd/user` (normally `~/.config/systemd/user`), and reloads the user manager. Keep the checkout and dependencies available. No root privileges are needed. `--enable` enables and starts the timer; a missed schedule can cause an immediate backup. Without it, existing timer activation is unchanged.
 
-To update the service after moving the checkout or changing Bun installations:
+After moving the checkout or changing Bun installations, register the command
+again from the new/current checkout before regenerating the units. Use the Bun
+installation intended for scheduled backups, and repeat any previous `--config`
+options on `service install`:
 
 ```sh
+cd /absolute/path/to/homekeep
+bun link
 homekeep service install
 ```
 
@@ -126,9 +148,9 @@ If you track these files with chezmoi, capture them after installing or updating
 chezmoi add ~/.config/systemd/user/homekeep.service ~/.config/systemd/user/homekeep.timer
 ```
 
-The [example service](systemd/homekeep.service) and [timer](systemd/homekeep.timer) remain available for manual installation. Their executable path and schedule must be edited for your machine.
+The [example service](systemd/homekeep.service) and [timer](systemd/homekeep.timer) remain available for manual installation. Both installation methods default to 06:00 local time; edit the example executable paths for your machine and adjust the schedule if desired.
 
-`Persistent=true` catches up missed calendar activations when the user timer becomes active. It does not track backup success or retry a failed run immediately. The timer does not deliberately wake a suspended laptop, no lingering is configured, and logged-out execution is not guaranteed. There is no battery-power restriction in the examples; they can run on battery. Rclone retries network failures within a run; afterward, failures wait for the next scheduled activation or manual retry.
+`Persistent=true` catches up missed calendar activations when the user timer becomes active. A daily schedule does not guarantee exactly one successful backup per day. It does not track backup success or retry a failed run immediately. The timer does not deliberately wake a suspended laptop, no lingering is configured, and logged-out execution is not guaranteed. There is no battery-power restriction in the examples; they can run on battery. Rclone retries network failures within a run; afterward, failures wait for the next scheduled activation or manual retry.
 
 The service allows long backups and stops its entire process group when cancelled. Standard output/error also go to the journal, in addition to Homekeep's file log. Systemd prevents duplicate activations of this service; Homekeep's lock also protects against concurrent direct CLI runs using the same state directory.
 
@@ -141,3 +163,39 @@ systemctl --user disable --now homekeep.timer
 ```
 
 A completed oneshot service normally becomes inactive; inspect its result and logs for success or failure. Disabling the timer does not stop a backup already running. Uncatchable termination of a direct CLI process may leave an orphan rclone process; confirm it has stopped before restarting. Systemd's process-group cleanup covers service runs.
+
+## Update local source and remove the installation
+
+`bun link` exposes this checkout directly. Source edits affect later CLI and timer
+invocations without a rebuild; dependency changes need `bun install --frozen-lockfile`.
+Use a separate checkout for development if this one is scheduled. A running Bun
+process is not restarted by `homekeep service install`. After moving the checkout
+or Bun executable, run `bun link` from the new/current checkout, then regenerate
+the units with the same config options used before. Alternatively, invoke the
+checkout directly with `bun /absolute/path/to/homekeep/src/cli.ts service install`
+and the previous config options; this regenerates units without repairing the
+globally linked command.
+
+To remove scheduling, first disable the timer:
+
+```sh
+systemctl --user disable --now homekeep.timer
+systemctl --user status homekeep.service
+```
+
+Let an active backup finish before removing units; disabling the timer does not
+cancel it. If cancellation is intended, use `systemctl --user stop homekeep.service`
+and confirm the process has stopped. Once no backup is running, remove the base
+units from the same XDG configuration location used for installation:
+
+```sh
+rm -- "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/homekeep.service" \
+      "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/homekeep.timer"
+systemctl --user daemon-reload
+```
+
+Inspect any `homekeep.service.d` or `homekeep.timer.d` directories separately;
+these commands retain your customizations. From the linked checkout, `bun unlink`
+removes the globally linked command. Scheduling removal alone leaves it usable.
+Configuration, rclone credentials, logs, backup data, and account-wide lingering
+are retained. No built-in service-uninstall command or data purge is provided.
